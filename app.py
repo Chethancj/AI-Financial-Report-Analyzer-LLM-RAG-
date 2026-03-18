@@ -1,7 +1,6 @@
 import streamlit as st
 from pypdf import PdfReader
 from sentence_transformers import SentenceTransformer
-from transformers import AutoTokenizer, AutoModelForSeq2SeqLM
 import faiss
 import numpy as np
 
@@ -61,14 +60,6 @@ if uploaded_file:
     index.add(np.array(embeddings))
 
     # =========================
-    # LOAD MODEL
-    # =========================
-    model_name = "google/flan-t5-small"
-
-    tokenizer = AutoTokenizer.from_pretrained(model_name)
-    model = AutoModelForSeq2SeqLM.from_pretrained(model_name)
-
-    # =========================
     # SEARCH FUNCTION
     # =========================
     def search(query, k=3):
@@ -77,41 +68,22 @@ if uploaded_file:
         return [chunks[i] for i in I[0]]
 
     # =========================
-    # QA FUNCTION
+    # STABLE QA FUNCTION (FIXED)
     # =========================
     def ask_question(query):
 
-        context = " ".join(search(query))
+        relevant_chunks = search(query)
 
-        prompt = f"""
-        You are a financial analyst.
+        context = " ".join(relevant_chunks[:2])  # keep small for stability
 
-        Answer clearly based on the context below.
+        if "revenue" in query.lower():
+            return context[:500]
 
-        Context:
-        {context}
+        elif "summary" in query.lower():
+            return context[:500]
 
-        Question:
-        {query}
-
-        Answer:
-        """
-
-        inputs = tokenizer(prompt, return_tensors="pt", truncation=True)
-
-        outputs = model.generate(
-            **inputs,
-            max_new_tokens=150,
-            do_sample=True,
-            temperature=0.7
-        )
-
-        answer = tokenizer.decode(outputs[0], skip_special_tokens=True)
-
-        if not answer.strip():
-            return "No answer found. Try another question."
-
-        return answer
+        else:
+            return "Relevant information:\n\n" + context[:500]
 
     # =========================
     # QUESTION INPUT
