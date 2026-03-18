@@ -29,7 +29,12 @@ if uploaded_file:
     index = faiss.IndexFlatL2(dimension)
     index.add(np.array(embeddings))
 
-    qa_pipeline = pipeline("text2text-generation", model="google/flan-t5-base")
+    from transformers import AutoTokenizer, AutoModelForSeq2SeqLM
+
+model_name = "google/flan-t5-small"
+
+tokenizer = AutoTokenizer.from_pretrained(model_name)
+model = AutoModelForSeq2SeqLM.from_pretrained(model_name)
 
     def search(query, k=3):
         query_embedding = embedder.encode([query])
@@ -39,8 +44,13 @@ if uploaded_file:
     def ask_question(query):
         context = " ".join(search(query))
         prompt = f"Answer based on context:\n{context}\n\nQuestion: {query}"
-        result = qa_pipeline(prompt, max_length=200)
-        return result[0]['generated_text']
+        inputs = tokenizer(prompt, return_tensors="pt", truncation=True)
+
+outputs = model.generate(**inputs, max_new_tokens=200)
+
+answer = tokenizer.decode(outputs[0], skip_special_tokens=True)
+
+return answer
 
     question = st.text_input("Ask a question")
 
