@@ -6,14 +6,16 @@ import numpy as np
 import requests
 
 # =========================
-# CONFIG
+# CONFIG (UPDATED ENDPOINT)
 # =========================
-API_URL = "https://api-inference.huggingface.co/models/mistralai/Mistral-7B-Instruct-v0.2"
+API_URL = "https://router.huggingface.co/hf-inference/models/mistralai/Mistral-7B-Instruct-v0.2"
+
 headers = {
-    "Authorization": f"Bearer {st.secrets['HUGGINGFACE_API_KEY']}"
+    "Authorization": f"Bearer {st.secrets['HUGGINGFACE_API_KEY']}",
+    "Content-Type": "application/json"
 }
 
-st.title("📊 AI Financial Report Analyzer (Free - Hugging Face)")
+st.title("📊 AI Financial Report Analyzer (Hugging Face)")
 
 # =========================
 # FILE UPLOAD
@@ -43,7 +45,7 @@ if uploaded_file:
         st.stop()
 
     # =========================
-    # SMART CHUNKING (with overlap)
+    # SMART CHUNKING (OVERLAP)
     # =========================
     def split_text(text, chunk_size=1000, overlap=200):
         chunks = []
@@ -52,7 +54,6 @@ if uploaded_file:
         return chunks
 
     chunks = split_text(text)
-
     st.write("Chunks created:", len(chunks))
 
     # =========================
@@ -87,10 +88,11 @@ if uploaded_file:
         prompt = f"""
 You are a financial analyst AI.
 
-Answer the question clearly and professionally using ONLY the context below.
+Answer clearly and professionally using ONLY the context below.
 
-- If numbers exist, present them cleanly
-- Use bullet points or tables where helpful
+Rules:
+- Present numbers cleanly
+- Use bullet points or tables when helpful
 - If answer is not found, say "Not found"
 
 Context:
@@ -102,31 +104,41 @@ Question:
 Answer:
 """
 
-        response = requests.post(
-            API_URL,
-            headers=headers,
-            json={
-                "inputs": prompt,
-                "parameters": {
-                    "max_new_tokens": 300,
-                    "temperature": 0.2,
-                    "return_full_text": False
-                }
-            }
-        )
-
-        result = response.json()
-
-        # =========================
-        # SAFE RESPONSE HANDLING
-        # =========================
         try:
+            response = requests.post(
+                API_URL,
+                headers=headers,
+                json={
+                    "inputs": prompt,
+                    "parameters": {
+                        "max_new_tokens": 300,
+                        "temperature": 0.2,
+                        "return_full_text": False
+                    }
+                },
+                timeout=60
+            )
+
+            # =========================
+            # ERROR HANDLING
+            # =========================
+            if response.status_code != 200:
+                return f"❌ API Error {response.status_code}: {response.text}"
+
+            result = response.json()
+
             if isinstance(result, list):
                 return result[0]["generated_text"].strip()
+
             elif "error" in result:
-                return f"❌ Error: {result['error']}"
+                return f"❌ Model Error: {result['error']}"
+
             else:
                 return str(result)
+
+        except requests.exceptions.Timeout:
+            return "⏳ Request timed out. Try again or reduce query size."
+
         except Exception as e:
             return f"❌ Unexpected error: {e}"
 
