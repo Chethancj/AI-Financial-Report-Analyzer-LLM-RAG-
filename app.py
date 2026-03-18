@@ -52,9 +52,10 @@ def ask_question(query):
     answer = tokenizer.decode(outputs[0], skip_special_tokens=True)
 
     return answer
-
     question = st.text_input("Ask a question")
 
-    if question:
+if question:
+    with st.spinner("Analyzing document..."):
         answer = ask_question(question)
-        st.write(answer)
+        st.success(answer)
+st.write("Chunks created:", len(chunks))
