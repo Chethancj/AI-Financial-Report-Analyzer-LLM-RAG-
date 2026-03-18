@@ -36,21 +36,21 @@ model_name = "google/flan-t5-small"
 tokenizer = AutoTokenizer.from_pretrained(model_name)
 model = AutoModelForSeq2SeqLM.from_pretrained(model_name)
 
-    def search(query, k=3):
-        query_embedding = embedder.encode([query])
-        D, I = index.search(query_embedding, k)
-        return [chunks[i] for i in I[0]]
+def search(query, k=3):
+    query_embedding = embedder.encode([query])
+    D, I = index.search(query_embedding, k)
+    return [chunks[i] for i in I[0]]
 
-    def ask_question(query):
-        context = " ".join(search(query))
-        prompt = f"Answer based on context:\n{context}\n\nQuestion: {query}"
-        inputs = tokenizer(prompt, return_tensors="pt", truncation=True)
+def ask_question(query):
+    context = " ".join(search(query))
+    prompt = f"Answer based on context:\n{context}\n\nQuestion: {query}"
 
-outputs = model.generate(**inputs, max_new_tokens=200)
+    inputs = tokenizer(prompt, return_tensors="pt", truncation=True)
+    outputs = model.generate(**inputs, max_new_tokens=200)
 
-answer = tokenizer.decode(outputs[0], skip_special_tokens=True)
+    answer = tokenizer.decode(outputs[0], skip_special_tokens=True)
 
-return answer
+    return answer
 
     question = st.text_input("Ask a question")
 
