@@ -74,13 +74,13 @@ if uploaded_file:
 
         relevant_chunks = search(query)
 
-        context = " ".join(relevant_chunks[:2])  # keep small for stability
+        context = " ".join(relevant_chunks)  # keep small for stability
 
         if "revenue" in query.lower():
-            return context[:500]
+            return context[:2000]
 
         elif "summary" in query.lower():
-            return context[:500]
+            return context[:2000]
 
         else:
             return "Relevant information:\n\n" + context[:500]
