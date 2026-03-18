@@ -54,8 +54,7 @@ def ask_question(query):
     return answer
     question = st.text_input("Ask a question")
 
-if question:
-    with st.spinner("Analyzing document..."):
+    if question:
+      with st.spinner("Analyzing document..."):
         answer = ask_question(question)
         st.success(answer)
-st.write("Chunks created:", len(chunks))
