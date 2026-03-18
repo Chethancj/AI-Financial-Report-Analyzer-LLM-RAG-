@@ -3,11 +3,17 @@ from pypdf import PdfReader
 from sentence_transformers import SentenceTransformer
 import faiss
 import numpy as np
+import requests
 
 # =========================
-# TITLE
+# CONFIG
 # =========================
-st.title("AI Financial Report Analyzer")
+API_URL = "https://api-inference.huggingface.co/models/mistralai/Mistral-7B-Instruct-v0.2"
+headers = {
+    "Authorization": f"Bearer {st.secrets['HUGGINGFACE_API_KEY']}"
+}
+
+st.title("📊 AI Financial Report Analyzer (Free - Hugging Face)")
 
 # =========================
 # FILE UPLOAD
@@ -37,10 +43,13 @@ if uploaded_file:
         st.stop()
 
     # =========================
-    # SPLIT TEXT
+    # SMART CHUNKING (with overlap)
     # =========================
-    def split_text(text, chunk_size=500):
-        return [text[i:i+chunk_size] for i in range(0, len(text), chunk_size)]
+    def split_text(text, chunk_size=1000, overlap=200):
+        chunks = []
+        for i in range(0, len(text), chunk_size - overlap):
+            chunks.append(text[i:i+chunk_size])
+        return chunks
 
     chunks = split_text(text)
 
@@ -62,35 +71,71 @@ if uploaded_file:
     # =========================
     # SEARCH FUNCTION
     # =========================
-    def search(query, k=3):
+    def search(query, k=6):
         query_embedding = embedder.encode([query])
         D, I = index.search(query_embedding, k)
         return [chunks[i] for i in I[0]]
 
     # =========================
-    # STABLE QA FUNCTION (FIXED)
+    # HUGGING FACE QA FUNCTION
     # =========================
     def ask_question(query):
 
-        relevant_chunks = search(query)
+        relevant_chunks = search(query, k=6)
+        context = "\n\n".join(relevant_chunks)
 
-        context = " ".join(relevant_chunks)  # keep small for stability
+        prompt = f"""
+You are a financial analyst AI.
 
-        if "revenue" in query.lower():
-            return context[:2000]
+Answer the question clearly and professionally using ONLY the context below.
 
-        elif "summary" in query.lower():
-            return context[:2000]
+- If numbers exist, present them cleanly
+- Use bullet points or tables where helpful
+- If answer is not found, say "Not found"
 
-        else:
-            return "Relevant information:\n\n" + context[:500]
+Context:
+{context}
+
+Question:
+{query}
+
+Answer:
+"""
+
+        response = requests.post(
+            API_URL,
+            headers=headers,
+            json={
+                "inputs": prompt,
+                "parameters": {
+                    "max_new_tokens": 300,
+                    "temperature": 0.2,
+                    "return_full_text": False
+                }
+            }
+        )
+
+        result = response.json()
+
+        # =========================
+        # SAFE RESPONSE HANDLING
+        # =========================
+        try:
+            if isinstance(result, list):
+                return result[0]["generated_text"].strip()
+            elif "error" in result:
+                return f"❌ Error: {result['error']}"
+            else:
+                return str(result)
+        except Exception as e:
+            return f"❌ Unexpected error: {e}"
 
     # =========================
-    # QUESTION INPUT
+    # USER INPUT
     # =========================
-    question = st.text_input("Ask a question")
+    question = st.text_input("Ask a question about the report")
 
     if question:
-        with st.spinner("Analyzing document..."):
+        with st.spinner("Analyzing document... ⏳"):
             answer = ask_question(question)
             st.success(answer)
