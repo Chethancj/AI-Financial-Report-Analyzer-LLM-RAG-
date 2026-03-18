@@ -4,6 +4,7 @@ from sentence_transformers import SentenceTransformer
 from transformers import pipeline
 import faiss
 import numpy as np
+from transformers import AutoTokenizer, AutoModelForSeq2SeqLM
 
 st.title("AI Financial Report Analyzer")
 
