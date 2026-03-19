@@ -6,55 +6,48 @@ import numpy as np
 import requests
 
 # =========================
-# CONFIG
+# GROQ CONFIG
 # =========================
-API_URL = "https://router.huggingface.co/hf-inference/models/mistralai/Mistral-7B-Instruct-v0.2"
+GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
 
-headers = {
-    "Authorization": f"Bearer {st.secrets['HUGGINGFACE_API_KEY']}",
-    "Content-Type": "application/json"
-}
-
-st.title("🧠 Autonomous Financial Analyst (Multi-Agent LLM)")
+st.title("🧠 Autonomous Financial Analyst (Multi-Agent LLM - Groq)")
 
 # =========================
-# FILE UPLOAD
+# LLM CALL FUNCTION (GROQ)
 # =========================
-uploaded_file = st.file_uploader("Upload Financial Report PDF")
+def call_llm(prompt, max_tokens=500):
 
-# =========================
-# LLM CALL FUNCTION
-# =========================
-def call_llm(prompt, max_tokens=300):
+    headers = {
+        "Authorization": f"Bearer {st.secrets['GROQ_API_KEY']}",
+        "Content-Type": "application/json"
+    }
+
+    data = {
+        "model": "llama3-70b-8192",
+        "messages": [
+            {"role": "system", "content": "You are a professional financial analyst AI."},
+            {"role": "user", "content": prompt}
+        ],
+        "temperature": 0.2,
+        "max_tokens": max_tokens
+    }
+
     try:
-        response = requests.post(
-            API_URL,
-            headers=headers,
-            json={
-                "inputs": prompt,
-                "parameters": {
-                    "max_new_tokens": max_tokens,
-                    "temperature": 0.2,
-                    "return_full_text": False
-                }
-            },
-            timeout=60
-        )
+        response = requests.post(GROQ_URL, headers=headers, json=data, timeout=30)
 
         if response.status_code != 200:
             return f"❌ API Error {response.status_code}: {response.text}"
 
         result = response.json()
-
-        if isinstance(result, list):
-            return result[0]["generated_text"].strip()
-        elif "error" in result:
-            return f"❌ Model Error: {result['error']}"
-        else:
-            return str(result)
+        return result["choices"][0]["message"]["content"].strip()
 
     except Exception as e:
         return f"❌ Error: {e}"
+
+# =========================
+# FILE UPLOAD
+# =========================
+uploaded_file = st.file_uploader("Upload Financial Report PDF")
 
 # =========================
 # MAIN PIPELINE
@@ -104,7 +97,7 @@ if uploaded_file:
     index.add(np.array(embeddings))
 
     # =========================
-    # SEARCH
+    # RETRIEVAL
     # =========================
     def retrieve(query, k=6):
         query_embedding = embedder.encode([query])
@@ -116,8 +109,6 @@ if uploaded_file:
     # =========================
     def financial_agent(context):
         prompt = f"""
-You are a financial analyst.
-
 Extract key financial metrics:
 - Revenue
 - Profit
@@ -126,16 +117,12 @@ Extract key financial metrics:
 
 Context:
 {context}
-
-Return clean bullet points.
 """
         return call_llm(prompt)
 
 
     def risk_agent(context):
         prompt = f"""
-You are a risk analyst.
-
 Identify:
 - Financial risks
 - Operational risks
@@ -143,16 +130,12 @@ Identify:
 
 Context:
 {context}
-
-Return concise bullet points.
 """
         return call_llm(prompt)
 
 
     def strategy_agent(context):
         prompt = f"""
-You are a strategy analyst.
-
 Summarize:
 - Business strategy
 - Future outlook
@@ -160,8 +143,6 @@ Summarize:
 
 Context:
 {context}
-
-Return concise insights.
 """
         return call_llm(prompt)
 
@@ -169,7 +150,16 @@ Return concise insights.
     # REASONING LOOP
     # =========================
     def reasoning_improve(answer):
-        critique = call_llm(f"Critique this answer for accuracy and completeness:\n{answer}")
+
+        critique = call_llm(f"""
+Critique the following answer for:
+- Accuracy
+- Missing insights
+- Clarity
+
+Answer:
+{answer}
+""")
 
         improved = call_llm(f"""
 Improve the answer using this critique.
@@ -180,8 +170,12 @@ Answer:
 Critique:
 {critique}
 
-Return a refined, structured response.
+Return a well-structured response with:
+📊 Financial Summary
+⚠️ Risks
+🧠 Strategy
 """)
+
         return improved
 
     # =========================
@@ -199,9 +193,7 @@ Return a refined, structured response.
 
         # Combine outputs
         combined_prompt = f"""
-You are a senior financial analyst.
-
-Create a structured report using:
+Create a structured financial report.
 
 Financials:
 {financials}
@@ -215,10 +207,7 @@ Strategy:
 User Question:
 {query}
 
-Format:
-📊 Financial Summary
-⚠️ Risks
-🧠 Strategy
+Format clearly with headings.
 """
         draft = call_llm(combined_prompt)
 
