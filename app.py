@@ -23,7 +23,7 @@ def call_llm(prompt, max_tokens=500):
     }
 
     data = {
-        "model":llama-3.3-70b-versatile,
+        "model":"llama-3.3-70b-versatile",
         "messages": [
             {"role": "system", "content": "You are a professional financial analyst AI."},
             {"role": "user", "content": prompt}
