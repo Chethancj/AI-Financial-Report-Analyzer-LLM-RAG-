@@ -6,7 +6,7 @@ import numpy as np
 import requests
 
 # =========================
-# CONFIG (UPDATED ENDPOINT)
+# CONFIG
 # =========================
 API_URL = "https://router.huggingface.co/hf-inference/models/mistralai/Mistral-7B-Instruct-v0.2"
 
@@ -15,7 +15,7 @@ headers = {
     "Content-Type": "application/json"
 }
 
-st.title("📊 AI Financial Report Analyzer (Hugging Face)")
+st.title("🧠 Autonomous Financial Analyst (Multi-Agent LLM)")
 
 # =========================
 # FILE UPLOAD
@@ -23,7 +23,41 @@ st.title("📊 AI Financial Report Analyzer (Hugging Face)")
 uploaded_file = st.file_uploader("Upload Financial Report PDF")
 
 # =========================
-# MAIN LOGIC
+# LLM CALL FUNCTION
+# =========================
+def call_llm(prompt, max_tokens=300):
+    try:
+        response = requests.post(
+            API_URL,
+            headers=headers,
+            json={
+                "inputs": prompt,
+                "parameters": {
+                    "max_new_tokens": max_tokens,
+                    "temperature": 0.2,
+                    "return_full_text": False
+                }
+            },
+            timeout=60
+        )
+
+        if response.status_code != 200:
+            return f"❌ API Error {response.status_code}: {response.text}"
+
+        result = response.json()
+
+        if isinstance(result, list):
+            return result[0]["generated_text"].strip()
+        elif "error" in result:
+            return f"❌ Model Error: {result['error']}"
+        else:
+            return str(result)
+
+    except Exception as e:
+        return f"❌ Error: {e}"
+
+# =========================
+# MAIN PIPELINE
 # =========================
 if uploaded_file:
 
@@ -45,7 +79,7 @@ if uploaded_file:
         st.stop()
 
     # =========================
-    # SMART CHUNKING (OVERLAP)
+    # CHUNKING
     # =========================
     def split_text(text, chunk_size=1000, overlap=200):
         chunks = []
@@ -70,84 +104,135 @@ if uploaded_file:
     index.add(np.array(embeddings))
 
     # =========================
-    # SEARCH FUNCTION
+    # SEARCH
     # =========================
-    def search(query, k=6):
+    def retrieve(query, k=6):
         query_embedding = embedder.encode([query])
         D, I = index.search(query_embedding, k)
         return [chunks[i] for i in I[0]]
 
     # =========================
-    # HUGGING FACE QA FUNCTION
+    # AGENTS
     # =========================
-    def ask_question(query):
-
-        relevant_chunks = search(query, k=6)
-        context = "\n\n".join(relevant_chunks)
-
+    def financial_agent(context):
         prompt = f"""
-You are a financial analyst AI.
+You are a financial analyst.
 
-Answer clearly and professionally using ONLY the context below.
-
-Rules:
-- Present numbers cleanly
-- Use bullet points or tables when helpful
-- If answer is not found, say "Not found"
+Extract key financial metrics:
+- Revenue
+- Profit
+- Costs
+- Growth trends
 
 Context:
 {context}
 
-Question:
-{query}
+Return clean bullet points.
+"""
+        return call_llm(prompt)
+
+
+    def risk_agent(context):
+        prompt = f"""
+You are a risk analyst.
+
+Identify:
+- Financial risks
+- Operational risks
+- Market risks
+
+Context:
+{context}
+
+Return concise bullet points.
+"""
+        return call_llm(prompt)
+
+
+    def strategy_agent(context):
+        prompt = f"""
+You are a strategy analyst.
+
+Summarize:
+- Business strategy
+- Future outlook
+- Competitive positioning
+
+Context:
+{context}
+
+Return concise insights.
+"""
+        return call_llm(prompt)
+
+    # =========================
+    # REASONING LOOP
+    # =========================
+    def reasoning_improve(answer):
+        critique = call_llm(f"Critique this answer for accuracy and completeness:\n{answer}")
+
+        improved = call_llm(f"""
+Improve the answer using this critique.
 
 Answer:
+{answer}
+
+Critique:
+{critique}
+
+Return a refined, structured response.
+""")
+        return improved
+
+    # =========================
+    # ORCHESTRATOR
+    # =========================
+    def multi_agent_system(query):
+
+        relevant_chunks = retrieve(query, k=6)
+        context = "\n\n".join(relevant_chunks)
+
+        # Run agents
+        financials = financial_agent(context)
+        risks = risk_agent(context)
+        strategy = strategy_agent(context)
+
+        # Combine outputs
+        combined_prompt = f"""
+You are a senior financial analyst.
+
+Create a structured report using:
+
+Financials:
+{financials}
+
+Risks:
+{risks}
+
+Strategy:
+{strategy}
+
+User Question:
+{query}
+
+Format:
+📊 Financial Summary
+⚠️ Risks
+🧠 Strategy
 """
+        draft = call_llm(combined_prompt)
 
-        try:
-            response = requests.post(
-                API_URL,
-                headers=headers,
-                json={
-                    "inputs": prompt,
-                    "parameters": {
-                        "max_new_tokens": 300,
-                        "temperature": 0.2,
-                        "return_full_text": False
-                    }
-                },
-                timeout=60
-            )
+        # Improve via reasoning loop
+        final_answer = reasoning_improve(draft)
 
-            # =========================
-            # ERROR HANDLING
-            # =========================
-            if response.status_code != 200:
-                return f"❌ API Error {response.status_code}: {response.text}"
-
-            result = response.json()
-
-            if isinstance(result, list):
-                return result[0]["generated_text"].strip()
-
-            elif "error" in result:
-                return f"❌ Model Error: {result['error']}"
-
-            else:
-                return str(result)
-
-        except requests.exceptions.Timeout:
-            return "⏳ Request timed out. Try again or reduce query size."
-
-        except Exception as e:
-            return f"❌ Unexpected error: {e}"
+        return final_answer
 
     # =========================
     # USER INPUT
     # =========================
-    question = st.text_input("Ask a question about the report")
+    question = st.text_input("Ask a financial question")
 
     if question:
-        with st.spinner("Analyzing document... ⏳"):
-            answer = ask_question(question)
+        with st.spinner("Running multi-agent analysis... ⏳"):
+            answer = multi_agent_system(question)
             st.success(answer)
